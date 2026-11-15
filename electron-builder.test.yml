@@ -1,0 +1,14 @@
+appId: com.andremts.multiclient3c
+productName: Andre Matos - Gerenciador 3C
+artifactName: Andre-Matos-Gerenciador-3C-${version}-teste.${ext}
+
+directories:
+  output: dist-teste
+  buildResources: build
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: portable
+      arch:
+        - x64

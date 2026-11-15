@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;">
+  <title>Andre Matos - Gerenciador 3C</title>
+  <link rel="stylesheet" href="./css/app.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Multi-Client 3C início">
+        <span class="brand-name">ANDRÉ MATOS</span>
+      </a>
+      <div class="topbar-actions">
+        <span class="version-label">Recarregar</span>
+        <button id="refresh-button" class="icon-button" type="button" title="Atualizar lista" aria-label="Atualizar lista">
+          <span aria-hidden="true">↻</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">AMBIENTES LOCAIS</p>
+          <h1 id="page-title">Instalações do Sisloc 3C</h1>
+          <p class="intro-copy">Escolha uma instalação para definir o nome da pasta e criar o atalho.</p>
+        </div>
+        <div class="folder-stamp" aria-hidden="true"><span>3C</span><i></i></div>
+      </section>
+
+      <section class="workspace" aria-label="Instalações e renomeação">
+        <div class="installations-panel">
+          <div class="section-heading">
+            <div>
+              <h2>Instalações encontradas</h2>
+              <p id="root-path" class="path-label">Documentos\Sisloc + AppData\Local\Sisloc\sisloc</p>
+            </div>
+            <span id="installation-count" class="count-badge">0</span>
+          </div>
+          <div class="installation-tabs" role="tablist" aria-label="Tipo de instalação">
+            <button id="available-tab" class="installation-tab active" type="button" role="tab" aria-selected="true">Para organizar</button>
+            <button id="managed-tab" class="installation-tab" type="button" role="tab" aria-selected="false">Organizadas</button>
+          </div>
+          <div id="installation-list" class="installation-list" aria-live="polite"></div>
+        </div>
+
+        <form id="rename-form" class="rename-panel" hidden>
+          <div class="panel-kicker"><span class="status-dot"></span> INSTALAÇÃO SELECIONADA</div>
+          <h2 id="selected-installation">Renomear instalação</h2>
+          <p class="form-caption">Origem: <strong id="selected-location"></strong>. O nome será alterado nesse mesmo local.</p>
+
+          <label for="folder-name">Nome da empresa</label>
+          <input id="folder-name" name="folder-name" type="text" maxlength="80" autocomplete="off" placeholder="Ex.: Empresa Exemplo" required>
+          <p id="suggestion-note" class="suggestion-note">Você pode digitar o nome manualmente.</p>
+
+          <div class="operation-note">
+            <span class="note-icon" aria-hidden="true">!</span>
+            <p>Pastas e atalhos existentes nunca serão substituídos.</p>
+          </div>
+          <div class="rename-actions">
+            <button id="rename-button" class="primary-button" type="submit">
+              <span>Renomear e criar atalho</span><span aria-hidden="true">→</span>
+            </button>
+            <button id="delete-installation-button" class="danger-button" type="button">Apagar pasta</button>
+          </div>
+        </form>
+
+        <div id="empty-selection" class="empty-selection">
+          <div class="empty-glyph" aria-hidden="true">↖</div>
+          <h2>Selecione uma instalação</h2>
+          <p>A lista mostra somente pastas que contêm o executável <code>sisloc.exe</code>.</p>
+        </div>
+      </section>
+
+      <footer class="statusbar">
+        <span id="status-indicator" class="status-indicator" aria-hidden="true"></span>
+        <p id="status-message" role="status">Pronto para localizar instalações.</p>
+        <span class="status-footnote">GERENCIADOR SISLOC 3C</span>
+      </footer>
+    </main>
+  </div>
+  <dialog id="action-dialog" class="action-dialog" aria-labelledby="action-dialog-title">
+    <div class="dialog-kicker">CONFIRMAR AÇÃO</div>
+    <h2 id="action-dialog-title"></h2>
+    <p id="action-dialog-message" class="dialog-message"></p>
+    <div id="action-name-group" class="action-name-group" hidden>
+      <label for="action-name-input">Digite o nome exato da pasta</label>
+      <input id="action-name-input" type="text" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="dialog-actions">
+      <button id="action-cancel-button" class="cancel-button" type="button">Cancelar</button>
+      <button id="action-confirm-button" class="primary-button" type="button">Confirmar</button>
+    </div>
+  </dialog>
+</body>
+</html>
