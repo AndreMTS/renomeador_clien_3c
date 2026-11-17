@@ -35,6 +35,7 @@ const portalHttpWarning = document.getElementById('portal-http-warning');
 const openPortalButton = document.getElementById('open-portal-button');
 const openDownloadFolderButton = document.getElementById('open-download-folder-button');
 const cancelDownloadButton = document.getElementById('cancel-download-button');
+const executeDownloadButton = document.getElementById('execute-download-button');
 const downloadProgress = document.getElementById('download-progress');
 const downloadProgressMessage = document.getElementById('download-progress-message');
 const downloadProgressPercent = document.getElementById('download-progress-percent');
@@ -45,6 +46,7 @@ let busy = false;
 let activeTab = 'managed';
 let pendingAction = null;
 let downloadBusy = false;
+let lastDownloadedFilePath = null;
 
 function setStatus(message, kind = 'neutral') {
   statusMessage.textContent = message;
@@ -238,11 +240,13 @@ window.sisloc.onPortalDownloadStatus((status) => {
     openPortalButton.disabled = true;
     cancelDownloadButton.disabled = false;
     cancelDownloadButton.hidden = false;
+    executeDownloadButton.hidden = true;
+    lastDownloadedFilePath = null;
     downloadProgress.hidden = false;
     downloadProgress.removeAttribute('value');
     downloadProgressPercent.textContent = '';
-    downloadProgressMessage.textContent = `Baixando ${status.filename} pelo portal...`;
-    setStatus('Download iniciado pelo portal do cliente.', 'neutral');
+    downloadProgressMessage.textContent = `Baixando ${status.filename}...`;
+    setStatus('Download iniciado automaticamente.', 'neutral');
     return;
   }
 
@@ -256,11 +260,15 @@ window.sisloc.onPortalDownloadStatus((status) => {
   cancelDownloadButton.disabled = false;
   cancelDownloadButton.hidden = true;
   if (status.type === 'completed') {
+    lastDownloadedFilePath = status.filePath;
+    executeDownloadButton.hidden = false;
     downloadProgress.value = 100;
     downloadProgressPercent.textContent = '100%';
     downloadProgressMessage.textContent = `Salvo em: ${status.filePath}`;
-    setStatus(`Download concluído: ${status.filename}.`, 'success');
+    setStatus(`Download concluído: ${status.filename}. Deseja executar o arquivo?`, 'success');
   } else {
+    executeDownloadButton.hidden = true;
+    lastDownloadedFilePath = null;
     downloadProgress.hidden = true;
     downloadProgressMessage.textContent = status.message;
     setStatus(status.message, status.type === 'error' ? 'error' : 'neutral');
@@ -272,12 +280,14 @@ portalForm.addEventListener('submit', async (event) => {
   if (downloadBusy) return;
 
   openPortalButton.disabled = true;
-  setStatus('Abrindo link isolado do cliente...');
+  executeDownloadButton.hidden = true;
+  lastDownloadedFilePath = null;
+  setStatus('Iniciando download automático...');
   try {
     const result = await window.sisloc.openDownloadPortal(portalUrlInput.value.trim());
     setStatus(result.message, result.ok ? 'success' : 'error');
   } catch (error) {
-    setStatus(`Não foi possível abrir o link: ${error.message}`, 'error');
+    setStatus(`Não foi possível iniciar o download: ${error.message}`, 'error');
   } finally {
     openPortalButton.disabled = downloadBusy;
   }
@@ -292,6 +302,19 @@ openDownloadFolderButton.addEventListener('click', async () => {
     setStatus(`Não foi possível abrir a pasta: ${error.message}`, 'error');
   } finally {
     openDownloadFolderButton.disabled = false;
+  }
+});
+
+executeDownloadButton.addEventListener('click', async () => {
+  if (!lastDownloadedFilePath) return;
+  executeDownloadButton.disabled = true;
+  try {
+    const result = await window.sisloc.executeDownload(lastDownloadedFilePath);
+    setStatus(result.message, result.ok ? 'success' : 'error');
+  } catch (error) {
+    setStatus(`Falha ao executar o arquivo: ${error.message}`, 'error');
+  } finally {
+    executeDownloadButton.disabled = false;
   }
 });
 

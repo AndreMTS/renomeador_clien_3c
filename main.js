@@ -8,13 +8,14 @@ const {
 } = require('./src/installation');
 const { discoverInstallations, validateDeleteSelection } = require('./src/discovery');
 const {
+  addDetectedDownloadExtension,
   formatPortalLoadError,
   getDownloadFilename,
   parseDownloadUrl,
+  prepareInstallerUrl,
   reserveDownloadPathSync
 } = require('./src/download');
 
-const portalWindows = new Map();
 const portalDownloadItems = new Map();
 
 function downloadDirectory() {
@@ -23,88 +24,6 @@ function downloadDirectory() {
 
 function sendDownloadEvent(sender, channel, payload) {
   if (!sender.isDestroyed()) sender.send(channel, payload);
-}
-
-function guardPortalNavigation(webContents, portalSession, appSender) {
-  webContents.setWindowOpenHandler(({ url }) => {
-    if (url !== 'about:blank') {
-      try {
-        parseDownloadUrl(url);
-      } catch {
-        sendDownloadEvent(appSender, 'downloads:portal-status', {
-          type: 'error',
-          message: 'Uma janela com protocolo não permitido foi bloqueada.'
-        });
-        return { action: 'deny' };
-      }
-    }
-
-    return {
-      action: 'allow',
-      overrideBrowserWindowOptions: {
-        width: 1000,
-        height: 720,
-        webPreferences: {
-          session: portalSession,
-          contextIsolation: true,
-          nodeIntegration: false,
-          sandbox: true,
-          devTools: !app.isPackaged
-        }
-      }
-    };
-  });
-
-  webContents.on('did-create-window', (childWindow) => {
-    guardPortalNavigation(childWindow.webContents, portalSession, appSender);
-    childWindow.on('closed', () => {
-      sendDownloadEvent(appSender, 'downloads:portal-status', {
-        type: 'window-closed',
-        message: 'Janela secundária do portal fechada.'
-      });
-    });
-  });
-
-  webContents.on('will-navigate', (navigationEvent, targetUrl) => {
-    try {
-      const target = parseDownloadUrl(targetUrl);
-      const current = new URL(webContents.getURL());
-      if (current.protocol === 'https:' && target.protocol === 'http:') {
-        navigationEvent.preventDefault();
-        sendDownloadEvent(appSender, 'downloads:portal-status', {
-          type: 'error',
-          message: 'Redirecionamento de HTTPS para HTTP bloqueado.'
-        });
-      }
-    } catch {
-      navigationEvent.preventDefault();
-      sendDownloadEvent(appSender, 'downloads:portal-status', {
-        type: 'error',
-        message: 'O portal tentou abrir um endereço fora de HTTP/HTTPS; navegação bloqueada.'
-      });
-    }
-  });
-
-  webContents.on('will-redirect', (navigationEvent, targetUrl, _isInPlace, isMainFrame) => {
-    if (!isMainFrame) return;
-    try {
-      const source = parseDownloadUrl(webContents.getURL());
-      const target = parseDownloadUrl(targetUrl);
-      if (source.protocol === 'https:' && target.protocol === 'http:') {
-        navigationEvent.preventDefault();
-        sendDownloadEvent(appSender, 'downloads:portal-status', {
-          type: 'error',
-          message: 'Redirecionamento de HTTPS para HTTP bloqueado.'
-        });
-      }
-    } catch {
-      navigationEvent.preventDefault();
-      sendDownloadEvent(appSender, 'downloads:portal-status', {
-        type: 'error',
-        message: 'Redirecionamento para um protocolo não permitido foi bloqueado.'
-      });
-    }
-  });
 }
 
 function installationRoots() {
@@ -147,52 +66,22 @@ ipcMain.handle('downloads:open-folder', async () => {
 });
 
 ipcMain.handle('downloads:open-portal', async (event, request) => {
-  let url;
+  let installerUrl;
   try {
-    url = parseDownloadUrl(request?.url);
+    installerUrl = prepareInstallerUrl(request?.url);
   } catch (error) {
     return { ok: false, message: error.message };
   }
 
   const senderId = event.sender.id;
   if (portalDownloadItems.has(senderId)) {
-    return { ok: false, message: 'Aguarde o download atual terminar ou cancele-o antes de abrir outro link.' };
-  }
-  const existingWindow = portalWindows.get(senderId);
-  if (existingWindow && !existingWindow.isDestroyed()) {
-    existingWindow.focus();
-    existingWindow.loadURL(url.href).catch((error) => {
-      if (error.code !== 'ERR_ABORTED' && !existingWindow.isDestroyed() && !portalDownloadItems.has(senderId)) {
-        sendDownloadEvent(event.sender, 'downloads:portal-status', {
-          type: 'error',
-          message: formatPortalLoadError(error)
-        });
-      }
-    });
-    return { ok: true, message: 'Endereço aberto. Se for um arquivo, o download começará automaticamente.' };
+    return { ok: false, message: 'Aguarde o download atual terminar ou cancele-o antes de iniciar outro.' };
   }
 
   const portalSession = session.fromPartition(`sisloc-download-${senderId}-${Date.now()}`);
-  const portalWindow = new BrowserWindow({
-    width: 1100,
-    height: 780,
-    minWidth: 720,
-    minHeight: 560,
-    parent: BrowserWindow.fromWebContents(event.sender) || undefined,
-    title: 'Portal de instalação do cliente',
-    webPreferences: {
-      session: portalSession,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      devTools: !app.isPackaged
-    }
-  });
-
-  portalWindows.set(senderId, portalWindow);
-  guardPortalNavigation(portalWindow.webContents, portalSession, event.sender);
   portalSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
-  portalSession.on('will-download', (downloadEvent, item, webContents) => {
+
+  portalSession.on('will-download', (downloadEvent, item, _webContents) => {
     try {
       if (portalDownloadItems.has(senderId)) {
         downloadEvent.preventDefault();
@@ -229,16 +118,21 @@ ipcMain.handle('downloads:open-portal', async (event, request) => {
       item.once('done', (_doneEvent, state) => {
         if (portalDownloadItems.get(senderId) === item) portalDownloadItems.delete(senderId);
         if (state === 'completed') {
+          let finalPath = savePath;
+          try {
+            finalPath = addDetectedDownloadExtension(savePath, item.getMimeType());
+          } catch {}
+          const finalFilename = path.basename(finalPath);
           sendDownloadEvent(event.sender, 'downloads:portal-status', {
             type: 'completed',
-            filename,
-            filePath: savePath
+            filename: finalFilename,
+            filePath: finalPath
           });
         } else {
           fs.rm(savePath, { force: true }).catch(() => {});
           sendDownloadEvent(event.sender, 'downloads:portal-status', {
             type: state === 'cancelled' ? 'cancelled' : 'error',
-            message: state === 'cancelled' ? 'Download do portal cancelado.' : `Download do portal terminou: ${state}.`
+            message: state === 'cancelled' ? 'Download cancelado.' : `Download terminou: ${state}.`
           });
         }
       });
@@ -251,32 +145,34 @@ ipcMain.handle('downloads:open-portal', async (event, request) => {
     }
   });
 
-  portalWindow.on('closed', () => {
-    if (portalWindows.get(senderId) === portalWindow) portalWindows.delete(senderId);
-    const activeItem = portalDownloadItems.get(senderId);
-    if (activeItem) activeItem.cancel();
-    else {
-      sendDownloadEvent(event.sender, 'downloads:portal-status', {
-        type: 'window-closed',
-        message: 'Janela do portal fechada.'
-      });
-    }
-  });
+  try {
+    portalSession.downloadURL(installerUrl.href);
+  } catch (error) {
+    return { ok: false, message: `Não foi possível iniciar o download: ${error.message}` };
+  }
 
-  portalWindow.show();
-  portalWindow.loadURL(url.href).catch((error) => {
-    if (error.code !== 'ERR_ABORTED' && !portalWindow.isDestroyed() && !portalDownloadItems.has(senderId)) {
-      sendDownloadEvent(event.sender, 'downloads:portal-status', {
-        type: 'error',
-        message: formatPortalLoadError(error)
-      });
-    }
-  });
-  return { ok: true, message: 'Endereço aberto. Se for um arquivo, o download começará automaticamente.' };
+  return { ok: true, message: 'Download iniciado automaticamente.' };
 });
 
 ipcMain.on('downloads:portal-cancel', (event) => {
   portalDownloadItems.get(event.sender.id)?.cancel();
+});
+
+ipcMain.handle('downloads:execute', async (_event, request) => {
+  const filePath = typeof request?.filePath === 'string' ? request.filePath : '';
+  if (!filePath) {
+    return { ok: false, message: 'Caminho do arquivo inválido.' };
+  }
+  try {
+    await fs.access(filePath);
+  } catch {
+    return { ok: false, message: 'O arquivo baixado não foi encontrado no disco.' };
+  }
+
+  const error = await shell.openPath(filePath);
+  return error
+    ? { ok: false, message: `Não foi possível executar o arquivo: ${error}` }
+    : { ok: true, message: `Executando: ${path.basename(filePath)}` };
 });
 
 ipcMain.handle('installations:open-folder', async (_event, request) => {
@@ -329,8 +225,7 @@ ipcMain.handle('installations:rename', async (_event, request) => {
 
     if (shouldCreateShortcut) {
       try {
-        await fs.access(shortcutPath);
-        return { ok: false, message: `Já existe um atalho chamado "${targetName}.lnk" na Área de Trabalho. Escolha outro nome. Nada foi alterado.` };
+        await fs.rm(shortcutPath, { force: true });
       } catch (error) {
         if (error.code !== 'ENOENT') throw error;
       }
@@ -354,9 +249,13 @@ ipcMain.handle('installations:rename', async (_event, request) => {
       : `Pasta renomeada para ${targetName}. Atalhos preexistentes não foram alterados.`;
     return { ok: true, message, renamed };
   } catch (error) {
+    let detail = error.message;
+    if (error.code === 'EBUSY' || error.code === 'EPERM') {
+      detail = 'A pasta ou o arquivo (sisloc.exe) está em uso ou aberto. Feche o programa antes de renomear.';
+    }
     const message = renamed
-      ? `A pasta foi renomeada, mas o atalho não pôde ser criado: ${error.message}`
-      : `Não foi possível concluir a operação: ${error.message}`;
+      ? `A pasta foi renomeada, mas o atalho não pôde ser criado: ${detail}`
+      : `Não foi possível concluir a operação: ${detail}`;
     return { ok: false, message, renamed };
   }
 });

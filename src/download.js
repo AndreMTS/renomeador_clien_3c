@@ -19,6 +19,23 @@ function parseDownloadUrl(value) {
   return url;
 }
 
+function prepareInstallerUrl(value) {
+  const url = parseDownloadUrl(value);
+  const pathname = url.pathname;
+  if (!pathname.endsWith('/install') && !pathname.endsWith('/install/')) {
+    if (!pathname.endsWith('/')) {
+      url.pathname += '/';
+    }
+    return new URL('install?type=sisloc', url);
+  }
+
+  if (!url.searchParams.has('type')) {
+    url.searchParams.set('type', 'sisloc');
+  }
+
+  return url;
+}
+
 function formatPortalLoadError(error) {
   const details = `${error?.code || ''} ${error?.message || ''}`;
   if (/ERR_SSL_PROTOCOL_ERROR/i.test(details)) {
@@ -148,6 +165,7 @@ module.exports = {
   formatPortalLoadError,
   getDownloadFilename,
   parseDownloadUrl,
+  prepareInstallerUrl,
   reserveDownloadPathSync,
   sanitizeDownloadFilename
 };

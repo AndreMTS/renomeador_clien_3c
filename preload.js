@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('sisloc', {
   openDownloadFolder: () => ipcRenderer.invoke('downloads:open-folder'),
   openDownloadPortal: (url) => ipcRenderer.invoke('downloads:open-portal', { url }),
   cancelPortalDownload: () => ipcRenderer.send('downloads:portal-cancel'),
+  executeDownload: (filePath) => ipcRenderer.invoke('downloads:execute', { filePath }),
   onPortalDownloadProgress: (callback) => {
     const listener = (_event, progress) => callback(progress);
     ipcRenderer.on('downloads:portal-progress', listener);

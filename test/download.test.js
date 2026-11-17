@@ -9,9 +9,29 @@ const {
   formatPortalLoadError,
   getDownloadFilename,
   parseDownloadUrl,
+  prepareInstallerUrl,
   reserveDownloadPathSync,
   sanitizeDownloadFilename
 } = require('../src/download');
+
+test('prepares installer URL by appending install?type=sisloc correctly', () => {
+  assert.equal(
+    prepareInstallerUrl('http://teclift.sisloc.srv.br/teclift/').href,
+    'http://teclift.sisloc.srv.br/teclift/install?type=sisloc'
+  );
+  assert.equal(
+    prepareInstallerUrl('http://teclift.sisloc.srv.br/teclift').href,
+    'http://teclift.sisloc.srv.br/teclift/install?type=sisloc'
+  );
+  assert.equal(
+    prepareInstallerUrl('https://cliente.example/portal/install').href,
+    'https://cliente.example/portal/install?type=sisloc'
+  );
+  assert.equal(
+    prepareInstallerUrl('https://cliente.example/portal/install?type=custom').href,
+    'https://cliente.example/portal/install?type=custom'
+  );
+});
 
 test('accepts HTTP and HTTPS URLs but rejects other schemes and embedded credentials', () => {
   assert.equal(parseDownloadUrl('http://192.168.1.20/client.zip').protocol, 'http:');
