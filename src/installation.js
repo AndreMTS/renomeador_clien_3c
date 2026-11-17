@@ -51,4 +51,31 @@ function hasSislocExecutable(entries) {
   return entries.some((entry) => entry.isFile() && entry.name.toLowerCase() === 'sisloc.exe');
 }
 
-module.exports = { extractCompanyNameFromIni, hasSislocExecutable, validateFolderName };
+function filterInstallations(installations, query) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return installations;
+
+  return installations.filter((installation) => {
+    const searchableText = normalizeSearchText([
+      installation.name,
+      installation.suggestedName,
+      installation.locationLabel
+    ].filter(Boolean).join(' '));
+    return searchableText.includes(normalizedQuery);
+  });
+}
+
+function normalizeSearchText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .trim();
+}
+
+module.exports = {
+  extractCompanyNameFromIni,
+  filterInstallations,
+  hasSislocExecutable,
+  validateFolderName
+};

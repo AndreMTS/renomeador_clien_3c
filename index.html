@@ -11,9 +11,13 @@
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#" aria-label="Multi-Client 3C início">
-        <span class="brand-name">ANDRÉ MATOS</span>
-      </a>
+      <div class="topbar-left">
+        <span class="brand-name">GERENCIADOR SISLOC 3C</span>
+        <nav class="primary-tabs" role="tablist" aria-label="Seções do gerenciador">
+          <button id="manage-view-tab" class="primary-tab active" type="button" role="tab" aria-selected="true">Gerenciar</button>
+          <button id="download-view-tab" class="primary-tab" type="button" role="tab" aria-selected="false">Baixar</button>
+        </nav>
+      </div>
       <div class="topbar-actions">
         <span class="version-label">Recarregar</span>
         <button id="refresh-button" class="icon-button" type="button" title="Atualizar lista" aria-label="Atualizar lista">
@@ -23,6 +27,7 @@
     </header>
 
     <main class="main-content">
+      <section id="manager-view" class="main-view" aria-labelledby="page-title">
       <section class="intro" aria-labelledby="page-title">
         <div>
           <p class="eyebrow">AMBIENTES LOCAIS</p>
@@ -42,8 +47,12 @@
             <span id="installation-count" class="count-badge">0</span>
           </div>
           <div class="installation-tabs" role="tablist" aria-label="Tipo de instalação">
-            <button id="available-tab" class="installation-tab active" type="button" role="tab" aria-selected="true">Para organizar</button>
-            <button id="managed-tab" class="installation-tab" type="button" role="tab" aria-selected="false">Organizadas</button>
+            <button id="available-tab" class="installation-tab" type="button" role="tab" aria-selected="false">Para organizar</button>
+            <button id="managed-tab" class="installation-tab active" type="button" role="tab" aria-selected="true">Organizadas</button>
+          </div>
+          <div id="managed-filter-container" class="managed-filter-container">
+            <label class="visually-hidden" for="managed-filter">Filtrar instalações organizadas</label>
+            <input id="managed-filter" class="managed-filter" type="search" placeholder="Filtrar por nome ou local..." autocomplete="off">
           </div>
           <div id="installation-list" class="installation-list" aria-live="polite"></div>
         </div>
@@ -62,6 +71,7 @@
             <p>Pastas e atalhos existentes nunca serão substituídos.</p>
           </div>
           <div class="rename-actions">
+            <button id="open-folder-button" class="secondary-button" type="button">Abrir pasta no Explorer</button>
             <button id="rename-button" class="primary-button" type="submit">
               <span>Renomear e criar atalho</span><span aria-hidden="true">→</span>
             </button>
@@ -75,11 +85,51 @@
           <p>A lista mostra somente pastas que contêm o executável <code>sisloc.exe</code>.</p>
         </div>
       </section>
+      </section>
+
+      <section id="download-view" class="main-view download-view" aria-labelledby="download-title" hidden>
+        <section class="intro">
+          <div>
+            <p class="eyebrow">TRANSFERÊNCIA DE CLIENTE</p>
+            <h1 id="download-title">Baixar instalação</h1>
+            <p class="intro-copy">Informe o endereço do instalador ou pacote fornecido pelo cliente.</p>
+          </div>
+          <div class="folder-stamp" aria-hidden="true"><span>↓</span><i></i></div>
+        </section>
+
+        <section class="download-panel" aria-label="Download de instalação">
+          <form id="portal-form">
+            <label for="portal-url">Link do portal ou do arquivo</label>
+            <div class="download-input-row">
+              <input id="portal-url" name="portal-url" type="url" inputmode="url" placeholder="http://servidor-do-cliente/sisloc/install?type=sisloc" autocomplete="url" required>
+              <button id="open-portal-button" class="primary-button" type="submit">Abrir link</button>
+            </div>
+            <p id="portal-http-warning" class="http-warning" hidden>Este portal usa HTTP sem criptografia. Confirme que o endereço pertence ao cliente.</p>
+          </form>
+
+          <div class="download-progress-area" aria-live="polite">
+            <div class="download-progress-toolbar">
+              <div class="download-progress-heading">
+                <span id="download-progress-message">Os arquivos serão salvos em Downloads\Gerenciador Sisloc.</span>
+                <span id="download-progress-percent"></span>
+              </div>
+              <button id="open-download-folder-button" class="folder-button" type="button">Abrir pasta de downloads</button>
+            </div>
+            <progress id="download-progress" max="100" value="0" hidden></progress>
+            <button id="cancel-download-button" class="cancel-download-button" type="button" hidden>Cancelar download</button>
+          </div>
+
+          <div class="operation-note download-safety-note">
+            <span class="note-icon" aria-hidden="true">!</span>
+            <p>O download não será aberto nem executado automaticamente. Confira o arquivo antes de usar.</p>
+          </div>
+        </section>
+      </section>
 
       <footer class="statusbar">
         <span id="status-indicator" class="status-indicator" aria-hidden="true"></span>
         <p id="status-message" role="status">Pronto para localizar instalações.</p>
-        <span class="status-footnote">GERENCIADOR SISLOC 3C</span>
+        <span class="dev-credit">DEV: ANDRE MATOS</span>
       </footer>
     </main>
   </div>

@@ -13,6 +13,9 @@ const renameButton = document.getElementById('rename-button');
 const refreshButton = document.getElementById('refresh-button');
 const availableTab = document.getElementById('available-tab');
 const managedTab = document.getElementById('managed-tab');
+const managedFilterContainer = document.getElementById('managed-filter-container');
+const managedFilter = document.getElementById('managed-filter');
+const openFolderButton = document.getElementById('open-folder-button');
 const deleteButton = document.getElementById('delete-installation-button');
 const actionDialog = document.getElementById('action-dialog');
 const actionDialogTitle = document.getElementById('action-dialog-title');
@@ -22,12 +25,26 @@ const actionNameInput = document.getElementById('action-name-input');
 const actionCancelButton = document.getElementById('action-cancel-button');
 const actionConfirmButton = document.getElementById('action-confirm-button');
 const renameButtonLabel = renameButton.querySelector('span');
+const managerView = document.getElementById('manager-view');
+const downloadView = document.getElementById('download-view');
+const manageViewTab = document.getElementById('manage-view-tab');
+const downloadViewTab = document.getElementById('download-view-tab');
+const portalForm = document.getElementById('portal-form');
+const portalUrlInput = document.getElementById('portal-url');
+const portalHttpWarning = document.getElementById('portal-http-warning');
+const openPortalButton = document.getElementById('open-portal-button');
+const openDownloadFolderButton = document.getElementById('open-download-folder-button');
+const cancelDownloadButton = document.getElementById('cancel-download-button');
+const downloadProgress = document.getElementById('download-progress');
+const downloadProgressMessage = document.getElementById('download-progress-message');
+const downloadProgressPercent = document.getElementById('download-progress-percent');
 
 let installations = [];
 let selectedInstallation = null;
 let busy = false;
-let activeTab = 'available';
+let activeTab = 'managed';
 let pendingAction = null;
+let downloadBusy = false;
 
 function setStatus(message, kind = 'neutral') {
   statusMessage.textContent = message;
@@ -53,20 +70,28 @@ function chooseInstallation(installation) {
 
 function renderInstallations() {
   listElement.replaceChildren();
-  const visibleInstallations = installations.filter((installation) =>
+  const tabInstallations = installations.filter((installation) =>
     activeTab === 'managed' ? installation.isManaged : !installation.isManaged
   );
+  const visibleInstallations = activeTab === 'managed'
+    ? window.sisloc.filterInstallations(tabInstallations, managedFilter.value)
+    : tabInstallations;
   countElement.textContent = String(visibleInstallations.length);
 
   if (visibleInstallations.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'list-empty';
     const heading = document.createElement('strong');
-    heading.textContent = activeTab === 'managed'
+    const hasFilter = activeTab === 'managed' && managedFilter.value.trim();
+    heading.textContent = hasFilter
+      ? 'Nenhuma instalação corresponde ao filtro'
+      : activeTab === 'managed'
       ? 'Nenhuma instalação organizada ainda'
       : 'Nenhuma instalação para organizar';
     const detail = document.createElement('span');
-    detail.textContent = activeTab === 'managed'
+    detail.textContent = hasFilter
+      ? 'Tente outro nome de cliente ou local.'
+      : activeTab === 'managed'
       ? 'As pastas renomeadas aparecerão aqui e poderão ser renomeadas ou apagadas.'
       : 'Confira se a pasta contém o executável sisloc.exe.';
     empty.append(heading, detail);
@@ -151,8 +176,132 @@ formElement.addEventListener('submit', async (event) => {
 });
 
 refreshButton.addEventListener('click', loadInstallations);
+manageViewTab.addEventListener('click', () => switchMainView('manager'));
+downloadViewTab.addEventListener('click', () => switchMainView('download'));
 availableTab.addEventListener('click', () => switchTab('available'));
 managedTab.addEventListener('click', () => switchTab('managed'));
+
+function switchMainView(view) {
+  const isManager = view === 'manager';
+  managerView.hidden = !isManager;
+  downloadView.hidden = isManager;
+  refreshButton.hidden = !isManager;
+  manageViewTab.classList.toggle('active', isManager);
+  manageViewTab.setAttribute('aria-selected', String(isManager));
+  downloadViewTab.classList.toggle('active', !isManager);
+  downloadViewTab.setAttribute('aria-selected', String(!isManager));
+  if (isManager) loadInstallations();
+}
+
+function updateHttpWarning() {
+  try {
+    portalHttpWarning.hidden = new URL(portalUrlInput.value.trim()).protocol !== 'http:';
+  } catch {
+    portalHttpWarning.hidden = true;
+  }
+}
+
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+portalUrlInput.addEventListener('input', updateHttpWarning);
+
+window.sisloc.onPortalDownloadProgress((progress) => {
+  downloadBusy = true;
+  openPortalButton.disabled = true;
+  cancelDownloadButton.hidden = false;
+  downloadProgress.hidden = false;
+  if (progress.percent === null) {
+    downloadProgress.removeAttribute('value');
+    downloadProgressPercent.textContent = '';
+    downloadProgressMessage.textContent = `${progress.filename} · ${formatBytes(progress.receivedBytes)} baixados do portal`;
+  } else {
+    downloadProgress.value = progress.percent;
+    downloadProgressPercent.textContent = `${progress.percent}%`;
+    downloadProgressMessage.textContent = `${progress.filename} · ${formatBytes(progress.receivedBytes)} de ${formatBytes(progress.totalBytes)}`;
+  }
+});
+
+window.sisloc.onPortalDownloadStatus((status) => {
+  if (status.type === 'started') {
+    downloadBusy = true;
+    openPortalButton.disabled = true;
+    cancelDownloadButton.disabled = false;
+    cancelDownloadButton.hidden = false;
+    downloadProgress.hidden = false;
+    downloadProgress.removeAttribute('value');
+    downloadProgressPercent.textContent = '';
+    downloadProgressMessage.textContent = `Baixando ${status.filename} pelo portal...`;
+    setStatus('Download iniciado pelo portal do cliente.', 'neutral');
+    return;
+  }
+
+  if (!['completed', 'cancelled', 'error'].includes(status.type)) {
+    setStatus(status.message, status.type === 'error' ? 'error' : 'neutral');
+    return;
+  }
+
+  downloadBusy = false;
+  openPortalButton.disabled = false;
+  cancelDownloadButton.disabled = false;
+  cancelDownloadButton.hidden = true;
+  if (status.type === 'completed') {
+    downloadProgress.value = 100;
+    downloadProgressPercent.textContent = '100%';
+    downloadProgressMessage.textContent = `Salvo em: ${status.filePath}`;
+    setStatus(`Download concluído: ${status.filename}.`, 'success');
+  } else {
+    downloadProgress.hidden = true;
+    downloadProgressMessage.textContent = status.message;
+    setStatus(status.message, status.type === 'error' ? 'error' : 'neutral');
+  }
+});
+
+portalForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (downloadBusy) return;
+
+  openPortalButton.disabled = true;
+  setStatus('Abrindo link isolado do cliente...');
+  try {
+    const result = await window.sisloc.openDownloadPortal(portalUrlInput.value.trim());
+    setStatus(result.message, result.ok ? 'success' : 'error');
+  } catch (error) {
+    setStatus(`Não foi possível abrir o link: ${error.message}`, 'error');
+  } finally {
+    openPortalButton.disabled = downloadBusy;
+  }
+});
+
+openDownloadFolderButton.addEventListener('click', async () => {
+  openDownloadFolderButton.disabled = true;
+  try {
+    const result = await window.sisloc.openDownloadFolder();
+    setStatus(result.message, result.ok ? 'success' : 'error');
+  } catch (error) {
+    setStatus(`Não foi possível abrir a pasta: ${error.message}`, 'error');
+  } finally {
+    openDownloadFolderButton.disabled = false;
+  }
+});
+
+cancelDownloadButton.addEventListener('click', () => {
+  if (downloadBusy) {
+    cancelDownloadButton.disabled = true;
+    downloadProgressMessage.textContent = 'Cancelando download...';
+    window.sisloc.cancelPortalDownload();
+  }
+});
 
 function switchTab(tab) {
   activeTab = tab;
@@ -160,12 +309,30 @@ function switchTab(tab) {
   availableTab.setAttribute('aria-selected', String(tab === 'available'));
   managedTab.classList.toggle('active', tab === 'managed');
   managedTab.setAttribute('aria-selected', String(tab === 'managed'));
+  managedFilterContainer.hidden = tab !== 'managed';
   selectedInstallation = null;
   formElement.hidden = true;
   deleteButton.hidden = true;
   emptySelection.hidden = false;
   renderInstallations();
 }
+
+managedFilter.addEventListener('input', renderInstallations);
+
+openFolderButton.addEventListener('click', async () => {
+  if (!selectedInstallation || busy) return;
+  openFolderButton.disabled = true;
+  try {
+    const result = await window.sisloc.openInstallationFolder({
+      installationId: selectedInstallation.id
+    });
+    setStatus(result.message, result.ok ? 'success' : 'error');
+  } catch (error) {
+    setStatus(`Falha ao abrir a pasta: ${error.message}`, 'error');
+  } finally {
+    openFolderButton.disabled = false;
+  }
+});
 
 deleteButton.addEventListener('click', async () => {
   if (!selectedInstallation?.isManaged || busy) return;

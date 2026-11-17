@@ -1,14 +1,14 @@
 {
   "name": "multiclient3c",
   "productName": "Andre Matos - Gerenciador 3C",
-  "version": "3.1.1",
+  "version": "3.2.0",
   "description": "Gerenciador de instalações Sisloc 3C",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dist:windows": "electron-builder --win portable",
     "dist:windows:test": "electron-builder --win portable --config electron-builder.test.yml",
-    "test": "node --test test/discovery.test.js test/installation.test.js"
+    "test": "node --test test/*.test.js"
   },
   "author": "Andre Matos (https://github.com/AndreMTS)",
   "license": "CC0-1.0",

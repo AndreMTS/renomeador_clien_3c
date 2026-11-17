@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
   extractCompanyNameFromIni,
+  filterInstallations,
   hasSislocExecutable,
   validateFolderName
 } = require('../src/installation');
@@ -40,4 +41,15 @@ test('recognizes an installation only by the exact sisloc.exe filename', () => {
   assert.equal(hasSislocExecutable([file('SISLOC.EXE')]), true);
   assert.equal(hasSislocExecutable([file('minhasisloc.exe')]), false);
   assert.equal(hasSislocExecutable([directory('sisloc.exe')]), false);
+});
+
+test('filters installations by folder, suggested company, and location without accent sensitivity', () => {
+  const installations = [
+    { name: 'Cliente Alfa', suggestedName: 'São José', locationLabel: 'Documentos\\Sisloc' },
+    { name: 'Cliente Beta', suggestedName: 'Beta', locationLabel: 'AppData\\Local\\Sisloc' }
+  ];
+
+  assert.deepEqual(filterInstallations(installations, 'sao jose'), [installations[0]]);
+  assert.deepEqual(filterInstallations(installations, 'appdata'), [installations[1]]);
+  assert.deepEqual(filterInstallations(installations, ''), installations);
 });
